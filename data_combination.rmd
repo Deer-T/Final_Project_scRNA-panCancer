@@ -1,0 +1,243 @@
+---
+title: "filter_and_combine"
+author: "Deer.T"
+date: "2023-04-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(dplyr)
+library(SeuratDisk)
+library(readr)
+
+```
+
+## Load Data
+
+
+```{r data loading}
+setwd("~/Desktop/毕业设计/data/")
+
+# 2019, Kathryn E. Yost  ,Nature Medicine
+GSE123814_scc<-read_table("./scc_scRNA_counts.txt")
+
+row_names<-GSE123814_scc$genename
+GSE123814_scc<-GSE123814_scc[,-1]
+rownames(GSE123814_scc)<-row_names
+GSE123814_scc_meta<-read_csv("~/Desktop/毕业设计/data/scc_metadata_with_respond.csv")
+GSE123814_scc_meta<-GSE123814_scc_meta[,-1]
+# meta 处理
+#test <- CreateSeuratObject(counts = GSE123814_scc)
+
+GSE123814_scc_obj<-Add_meta(count = GSE123814_scc,cellid_colname = 'cell.id',processed_meta = GSE123814_scc_meta,colname_change_orig = "cluster",colname_change_post = "Anno_orig")
+GSE123814_scc_obj<-filter_custom(GSE123814_scc_obj)
+Idents(GSE123814_scc_obj)<-"GSE123814_scc"
+
+
+
+GSE123814_bcc<-read_table("~/Desktop/毕业设计/data/bcc_scRNA_counts.txt")
+row_names<-GSE123814_bcc$genename
+GSE123814_bcc<-GSE123814_bcc[,-1]
+rownames(GSE123814_bcc)<-row_names
+GSE123814_bcc_meta<-read_csv("~/Desktop/毕业设计/data/bcc_metadata_with_respond.csv")
+GSE123814_bcc_meta<-GSE123814_bcc_meta[,-1]
+
+GSE123814_bcc_obj<-Add_meta(count = GSE123814_bcc,cellid_colname = 'cell.id',processed_meta = GSE123814_bcc_meta,colname_change_orig = "sort",colname_change_post = "Anno_orig")
+GSE123814_bcc_obj<-GSE123814_bcc_obj %>% filter_custom()
+Idents(GSE123814_bcc_obj)<-"GSE123814_bcc"
+
+
+# 2020, Kobe C. Yuen, Nat Med
+GSE145281_bladder<-read_table("~/Desktop/毕业设计/data/GSE145281_respond_and_non.txt")
+row_names<-GSE145281_bladder$`"genename"`
+GSE145281_bladder<-GSE145281_bladder[,-1]
+colnames(GSE145281_bladder)<-gsub('["]','',colnames(GSE145281_bladder))
+rownames(GSE145281_bladder)<-gsub('["]','',row_names)
+
+GSE145281_bladder_obj<-CreateSeuratObject(GSE145281_bladder)
+GSE145281_bladder_obj <-GSE145281_bladder_obj%>% match_info() 
+GSE145281_bladder_obj<-GSE145281_bladder_obj %>% filter_custom()
+Idents(GSE145281_bladder_obj)<-"GSE145281_bladder"
+
+# 2021，Yuanyuan Zhang，Cancer Cell
+test<-Read10X('~/Desktop/毕业设计/data/TNBC')
+tnbc_meta<-read_csv("~/Desktop/毕业设计/data/tnbc_meta_processed.csv")
+#GSE169246_tnbc<-CreateSeuratObject(test)
+GSE169246_tnbc<-test %>% Add_meta_2(cellid_colname = "cellid",processed_meta = tnbc_meta)
+GSE169246_tnbc<-GSE169246_tnbc %>% subset(subset= group=="Anti-PD-L1+Chemo")
+GSE169246_tnbc@meta.data<-GSE169246_tnbc@meta.data[,-8]
+GSE169246_tnbc@meta.data$orig.ident<-"GSE169246_tnbc"
+Idents(GSE169246_tnbc)<-"GSE169246_tnbc"
+GSE169246_tnbc<-GSE169246_tnbc %>% filter_custom()
+
+
+# 2021, Baolin Liu, Nat Cancer
+GSE179994_NSCLC<-readRDS("~/Desktop/毕业设计/data/GSE179994_all.Tcell.rawCounts.rds")
+GSE179994_NSCLC_meta<-read_csv("~/Desktop/毕业设计/data/nsclc_2021_meta_with_respond.csv")
+
+GSE179994_NSCLC_obj<-CreateSeuratObject(GSE179994_NSCLC)
+GSE179994_NSCLC_obj<-Add_meta_3(GSE179994_NSCLC_obj,"cellid",GSE179994_NSCLC_meta)
+GSE179994_NSCLC_obj<- GSE179994_NSCLC_obj %>% filter_custom()
+Idents(GSE179994_NSCLC_obj)<-"GSE179994_NSCLC"
+
+```
+
+## 可视化
+1. 对每个数据集进行FeaturePlot分析，并保存pdf
+2. 合并数据集后(combine)，给出re-batch前，后（CCA和harmony，服务器上操作）的dimplot
+
+```{r}
+# 对每个数据集进行FeaturePlot分析，并保存pdf
+
+pdf("~/Desktop/毕业设计/result/sc/FeatureScatter/GSE169246_tnbc.pdf",width=6,height = 4)
+Idents(GSE169246_tnbc)<-"GSE169246_tnbc"
+GSE169246_tnbc %>% FeatureScatter(feature1 = "nFeature_RNA",feature2 = "nCount_RNA")
+dev.off()
+
+pdf("~/Desktop/毕业设计/result/sc/FeatureScatter/GSE179994_NSCLC.pdf",width=6,height = 4)
+Idents(GSE179994_NSCLC_obj)<-"GSE179994_NSCLC"
+GSE179994_NSCLC_obj %>% FeatureScatter(feature1 = "nFeature_RNA",feature2 = "nCount_RNA")
+dev.off()
+
+pdf("~/Desktop/毕业设计/result/sc/FeatureScatter/GSE145281_bladder.pdf",width=6,height = 4)
+Idents(GSE145281_bladder_obj)<-"GSE145281_bladder"
+GSE145281_bladder_obj %>% FeatureScatter(feature1 = "nFeature_RNA",feature2 = "nCount_RNA")
+dev.off()
+
+pdf("~/Desktop/毕业设计/result/sc/FeatureScatter/GSE123814_scc.pdf",width=6,height = 4)
+Idents(GSE123814_scc_obj)<-"GSE123814_scc"
+GSE123814_scc_obj %>% FeatureScatter(feature1 = "nFeature_RNA",feature2 = "nCount_RNA")
+dev.off()
+
+GSE123814_bcc_obj<-subset(GSE123814_bcc_obj, subset = nFeature_RNA<4500)
+pdf("~/Desktop/毕业设计/result/sc/FeatureScatter/GSE123814_bcc.pdf",width=6,height = 4)
+Idents(GSE123814_bcc_obj)<-"GSE123814_bcc"
+GSE123814_bcc_obj %>% FeatureScatter(feature1 = "nFeature_RNA",feature2 = "nCount_RNA")
+dev.off()
+
+```
+
+
+```{r combine}
+#combine
+combined.list<-merge(x=GSE169246_tnbc,y=c(GSE179994_NSCLC_obj,GSE145281_bladder_obj,GSE123814_scc_obj,GSE123814_bcc_obj),add.cell.ids=c("GSE169246_tnbc","GSE179994_NSCLC","GSE145281_bladde","GSE123814_scc","GSE123814_bcc"),project="AllCombined")
+
+
+
+```
+
+```{r process}
+merged.ifnb<-combined.list
+
+merged.ifnb <- NormalizeData(merged.ifnb, normalization.method = "LogNormalize", scale.factor = 10000) 
+merged.ifnb <- FindVariableFeatures(merged.ifnb, selection.method = "vst", nfeatures = 2000)
+
+merged.ifnb <- ScaleData(merged.ifnb)
+merged.ifnb <- RunPCA(merged.ifnb) 
+merged.ifnb <- FindNeighbors(merged.ifnb, dims = 1:30) 
+merged.ifnb <- FindClusters(merged.ifnb) merged.ifnb <- RunUMAP(merged.ifnb, dims = 1:30)
+```
+
+
+
+## Filter
+
+- Condition
+1. expressed genes>600
+2. UMIs: 600< <25,000
+
+
+```{r filter function}
+filter_custom<-function(Seurat_obj,min_genes=600,minUMI=600,maxUMI=25000){
+  # Calculate percent ribosomal genes and add to metadata
+  ribo.genes <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = Seurat_obj@assays$RNA@data), value = TRUE)
+  percent.ribo <- Matrix::colSums(Seurat_obj@assays$RNA@counts[ribo.genes, ])/Matrix::colSums(Seurat_obj@assays$RNA@data)
+  Seurat_obj <- AddMetaData(object = Seurat_obj, metadata = percent.ribo, col.name = "percent.ribo")
+  
+  return(subset(x=Seurat_obj, subset = nCount_RNA<maxUMI & nFeature_RNA > min_genes & nCount_RNA>minUMI))
+  
+}
+```
+
+```{r}
+Add_meta<-function(count,cellid_colname,processed_meta,colname_change_orig,colname_change_post){
+  test<-CreateSeuratObject(counts = count)
+  meta<-test@meta.data
+  cell_id<-rownames(meta)
+  meta[cellid_colname]<-cell_id
+  meta<-full_join(meta,processed_meta,by=cellid_colname)
+  meta<-meta[colnames(meta)!=cellid_colname]
+  rownames(meta)<-cell_id
+  colnames(meta)[ colnames(meta) == colname_change_orig ] = colname_change_post
+  
+  Seuratobj <- AddMetaData(test , metadata = meta)
+  return(Seuratobj)
+}
+
+Add_meta_2<-function(test,cellid_colname,processed_meta){
+  test<-CreateSeuratObject(counts = test)#test is SeuratObj
+  meta<-test@meta.data
+  cell_id<-rownames(meta)
+  meta[cellid_colname]<-cell_id
+  meta<-full_join(meta,processed_meta,by=cellid_colname)
+  meta<-meta[colnames(meta)!=cellid_colname]
+  rownames(meta)<-cell_id
+  #colnames(meta)[ colnames(meta) == colname_change_orig ] = colname_change_post
+  
+  Seuratobj <- AddMetaData(test , metadata = meta)
+  return(Seuratobj)
+}
+
+Add_meta_3<-function(test,cellid_colname,processed_meta){
+  #test<-CreateSeuratObject(counts = test)#test is SeuratObj
+  meta<-test@meta.data
+  cell_id<-rownames(meta)
+  meta[cellid_colname]<-cell_id
+  meta<-full_join(meta,processed_meta,by=cellid_colname)
+  meta<-meta[colnames(meta)!=cellid_colname]
+  rownames(meta)<-cell_id
+  #colnames(meta)[ colnames(meta) == colname_change_orig ] = colname_change_post
+  
+  Seuratobj <- AddMetaData(test , metadata = meta)
+  return(Seuratobj)
+}
+```
+
+```{r}
+match_info<-function(obj){
+  Respond<-c()
+  meta<-obj@meta.data
+  for(i in 1:nrow(meta)){
+    if(meta[i,1] %in% c("R1","R2",'R3','R4','R5')){
+      Respond<-append(Respond,'yes')
+    }
+    else{
+      Respond<-append(Respond,'no')
+    }
+  }
+  meta$patient<-meta$orig.ident
+  meta$treatment<-'None'
+  meta$Anno_orig<-'None'
+  meta$Respond<-Respond
+  
+  
+  obj<-AddMetaData(obj,metadata = meta)
+  return(obj)
+  
+}
+```
+
+```{r FeaturePlot}
+
+FeatScatter_each<-function(obj,file_path){
+  pdf(file_path,width=6,height = 4)
+  obj %>% FeatureScatter(feature1 = "nFeature_RNA",feature2 = "nCount_RNA",raster = FALSE)
+  
+  dev.off()
+  return(0)
+}
+
+```
+
